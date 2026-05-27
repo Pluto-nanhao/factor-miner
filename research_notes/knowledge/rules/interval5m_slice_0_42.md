@@ -1,0 +1,2 @@
+- When using Interval5m data in codegen, only use intraday bars `0:42`.
+- Avoid `1:43` unless explicitly and separately justified in a custom research note.
