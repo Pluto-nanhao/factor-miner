@@ -4,7 +4,7 @@
 
 ## 项目简介
 
-`tinyKaggleClaw` 的因子挖掘模块面向本地量化研究环境，目标不是一次性生成一个因子，而是搭建一条可以长期运行的自动化研发流水线。
+`factor-miner` 的因子挖掘模块面向本地量化研究环境，目标不是一次性生成一个因子，而是搭建一条可以长期运行的自动化研发流水线。
 
 当前流水线覆盖：
 
@@ -22,7 +22,7 @@
 ## 项目结构
 
 ```text
-tinyKaggleClaw/
+factor-miner/
 ├── ai_start.sh                         # 面向人和 AI 的统一启动入口
 ├── FACTOR_MINING_README.md             # 因子挖掘操作手册
 ├── CODEX_RUN_README.md                 # Codex 安装和运行说明
@@ -75,7 +75,7 @@ output/factor_mining/factor_mining_IntraDay_YYYYMMDD_HHMMSS/
 进入项目根目录：
 
 ```bash
-cd /mnt/storage/work/hwang/tinyKaggleClaw
+cd /mnt/storage/work/hwang/factor-miner
 ```
 
 查看帮助和状态：

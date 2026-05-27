@@ -1,4 +1,4 @@
-# tinyKaggleClaw 因子挖掘工作流
+# factor-miner 因子挖掘工作流
 
 这份文档说明如何用本项目持续挖掘、回测、复现和拯救 A 股日内因子。它是项目操作手册，包含具体命令、路径和脚本。若只需要给人参考的通用流程文档，请看 [docs/factor_mining_reference_workflow.md](docs/factor_mining_reference_workflow.md)。
 
@@ -7,7 +7,7 @@
 从项目根目录启动：
 
 ```bash
-cd /mnt/storage/work/hwang/tinyKaggleClaw
+cd /mnt/storage/work/hwang/factor-miner
 ./ai_start.sh start
 ```
 
@@ -50,7 +50,7 @@ cd /mnt/storage/work/hwang/tinyKaggleClaw
 常用路径：
 
 ```text
-/mnt/storage/work/hwang/tinyKaggleClaw
+/mnt/storage/work/hwang/factor-miner
 /usr/local/gsim/.venv/bin/python
 /usr/local/gsim/run.py
 /mnt/storage/work/hwang/pnl
@@ -78,8 +78,9 @@ cd /mnt/storage/work/hwang/tinyKaggleClaw
 
 - `ITERS=40`
 - `PARALLEL=8`
-- `FACTOR_MINER_CODEGEN_PARALLEL=2`
-- `FACTOR_MINER_DISCUSSION_PARALLEL=false`
+- `FACTOR_MINER_CODEGEN_PARALLEL=6`
+- `FACTOR_MINER_DISCUSSION_AGENTS=3`
+- `FACTOR_MINER_DISCUSSION_PARALLEL=true`
 - `FACTOR_MINER_CODEX_MODEL=gpt-5.4`
 - `FACTOR_MINER_DISCUSSION_MODEL=gpt-5.4`
 - `FACTOR_MINER_FEEDBACK_MODEL=gpt-5.4`
@@ -93,7 +94,7 @@ cd /mnt/storage/work/hwang/tinyKaggleClaw
 自定义规模：
 
 ```bash
-ITERS=20 PARALLEL=4 FACTOR_MINER_CODEGEN_PARALLEL=1 ./baseline/run_factor_mining_v1.sh
+ITERS=20 PARALLEL=4 FACTOR_MINER_CODEGEN_PARALLEL=3 ./baseline/run_factor_mining_v1.sh
 ```
 
 ### `scripts/run_factor_mining_forever.py`
@@ -102,11 +103,12 @@ ITERS=20 PARALLEL=4 FACTOR_MINER_CODEGEN_PARALLEL=1 ./baseline/run_factor_mining
 
 默认策略：
 
-- 每轮 40 个 iter
-- 回测并行 8
-- Codex codegen 并行 2
-- 三代理讨论串行
-- 当前主结果达到 40 条后，启动下一轮
+- 每轮 120 个 iter
+- 回测并行 12
+- Codex codegen 并行 6
+- 三代理讨论并行
+- 最多 2 个 active main rounds
+- 当前轮 codegen 全部提交、结果数达到 110 且 active gsim 少于 8 时，可以提前启动下一轮
 - rescue 可以异步跑，不阻塞下一轮主 miner
 
 启动：
@@ -130,7 +132,7 @@ ITERS=20 PARALLEL=4 FACTOR_MINER_CODEGEN_PARALLEL=1 ./baseline/run_factor_mining
 - 每个目标复现 40 个 iter
 - 回测并行 8
 - Codex codegen 并行 2
-- 三代理讨论串行
+- 三代理讨论并行
 - 复现完成后写入 `output/factors_directory_replication/replication_ledger.csv`
 
 启动：
@@ -145,7 +147,7 @@ ITERS=20 PARALLEL=4 FACTOR_MINER_CODEGEN_PARALLEL=1 ./baseline/run_factor_mining
 FACTOR_REPLICATION_ITERS=40 \
 FACTOR_REPLICATION_PARALLEL=8 \
 FACTOR_REPLICATION_CODEGEN_PARALLEL=2 \
-FACTOR_REPLICATION_DISCUSSION_PARALLEL=false \
+FACTOR_REPLICATION_DISCUSSION_PARALLEL=true \
 .venv/bin/python scripts/run_factors_directory_replication_forever.py
 ```
 
@@ -246,7 +248,7 @@ simsummary failed
 ### 正常持续挖掘
 
 ```bash
-cd /mnt/storage/work/hwang/tinyKaggleClaw
+cd /mnt/storage/work/hwang/factor-miner
 ./ai_start.sh start
 ```
 
@@ -273,7 +275,7 @@ ITERS=5 PARALLEL=2 FACTOR_MINER_CODEGEN_PARALLEL=1 ./baseline/run_factor_mining_
 先查看：
 
 ```bash
-pgrep -af 'tinyKaggleClaw|/usr/local/gsim/run.py'
+pgrep -af 'factor-miner|/usr/local/gsim/run.py'
 ```
 
 终止时要覆盖：
@@ -282,8 +284,8 @@ pgrep -af 'tinyKaggleClaw|/usr/local/gsim/run.py'
 pgrep -af 'scripts/run_factor_mining_forever.py'
 pgrep -af 'scripts/run_factors_directory_replication_forever.py'
 pgrep -af 'src.baseline.local_factor_miner'
-pgrep -af 'codex exec .*tinyKaggleClaw'
-pgrep -af '/usr/local/gsim/run.py /mnt/storage/work/hwang/tinyKaggleClaw'
+pgrep -af 'codex exec .*factor-miner'
+pgrep -af '/usr/local/gsim/run.py /mnt/storage/work/hwang/factor-miner'
 ```
 
 ## 并行策略
@@ -377,9 +379,9 @@ pgrep -af 'run_factor_mining_forever.py|run_factors_directory_replication_foreve
 printf 'miner='
 pgrep -af 'src.baseline.local_factor_miner' | wc -l
 printf 'codex='
-pgrep -af 'codex exec .*tinyKaggleClaw' | wc -l
+pgrep -af 'codex exec .*factor-miner' | wc -l
 printf 'gsim='
-pgrep -af '/usr/local/gsim/run.py /mnt/storage/work/hwang/tinyKaggleClaw' | wc -l
+pgrep -af '/usr/local/gsim/run.py /mnt/storage/work/hwang/factor-miner' | wc -l
 ```
 
 ### 看某个 run 的进度
@@ -479,7 +481,7 @@ results.csv 没有对应 iteration
 检查：
 
 ```bash
-pgrep -af '/usr/local/gsim/run.py /mnt/storage/work/hwang/tinyKaggleClaw'
+pgrep -af '/usr/local/gsim/run.py /mnt/storage/work/hwang/factor-miner'
 ```
 
 补跑：
@@ -711,8 +713,8 @@ GSIM_SUMMARY
 
 ```bash
 ./ai_start.sh status
-pgrep -af 'codex exec .*tinyKaggleClaw' | wc -l
-pgrep -af '/usr/local/gsim/run.py /mnt/storage/work/hwang/tinyKaggleClaw' | wc -l
+pgrep -af 'codex exec .*factor-miner' | wc -l
+pgrep -af '/usr/local/gsim/run.py /mnt/storage/work/hwang/factor-miner' | wc -l
 ```
 
 3. 查看最新 run：

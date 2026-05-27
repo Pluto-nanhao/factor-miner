@@ -1,16 +1,20 @@
-# tinyKaggleClaw
+# factor-miner
 
-`tinyKaggleClaw` is a local-first multi-agent runtime for machine learning research.
+`factor-miner` is a local-first automation framework for Chinese A-share intraday alpha factor research.
 
-The core design goal is simple: a human gives the system one Kaggle or ML task, and the agent team keeps iterating from there with minimal human intervention.
+The system uses Codex/LLM agents to propose factor ideas, generate `AlphaBase` code, run local `gsim` backtests, parse performance metrics, apply install gates, and feed failures back into later prompts. It is built for continuous factor discovery rather than one-off manual experiments.
 
-Instead of repeatedly prompting one assistant by hand, you get a standing three-agent team:
+The core loop is:
 
-- `leader` drives orchestration and next-step decisions
-- `researcher` handles EDA, implementation, and experiment design
-- `trainer` handles queue submission, result triage, and experiment reporting
+- discuss a candidate with researcher/reviewer/synthesizer agents
+- generate one gsim-compatible factor source file
+- prescreen and backtest through `/usr/local/gsim/run.py`
+- evaluate Sharpe, return, turnover, drawdown, and correlation
+- install accepted factors and record ledgers
+- rescue promising failures with negation, decay, power transforms, and decorrelation attempts
+- keep the daemon running, including controlled overlap between rounds
 
-The system is built for people who want more than a chat interface: continuous iteration, explicit role boundaries, a real training queue, a forum-style runtime board for watching agent conversations, and a clean training board for tracking submitted jobs.
+`research_mvp/` remains in the repository as an optional tmux/web orchestration shell, but the primary project identity is now the factor-mining pipeline.
 
 ## Visual Overview
 
@@ -26,15 +30,6 @@ Clean queue board for submitted jobs, status, and logs.
 
 ----
 
-BirdCLEF trend
-[![BirdCLEF trend](github/birdclef2026_baseline_v2_to_v9_top3_fold01_trend.png)](github/birdclef2026_baseline_v2_to_v9_top3_fold01_trend.jpg) 
-
-----
-
-MNIST trend
-[![MNIST trend](github/mnist_baseline_v1_to_v10_top3_trend.png)](github/mnist_baseline_v1_to_v10_top3_trend.jpg) 
-
-
 | Code generation                                                                                           | Docs generation                                                           |
 |-----------------------------------------------------------------------------------------------------------|---------------------------------------------------------------------------|
 | [![Generated baseline scripts](github/gen_baseline_scripts_pic.png)](github/gen_baseline_scripts_pic.jpg) | [![Generated docs](github/gen_docs_pic.png)](github/gen_docs_pic.png)     |
@@ -42,10 +37,7 @@ MNIST trend
 
 ---
 
-This repository currently serves two purposes:
-
-- the `research_mvp` runtime itself
-- an example research workspace with `baseline/`, `src/baseline/`, `recipe/`, `eda/`, `docs/`, and `output/`
+This repository serves the factor-mining workflow first. The older `research_mvp` runtime remains available as a local orchestration shell, while `scripts/`, `baseline/`, and `src/baseline/` contain the factor generation, backtest, rescue, and daemon logic.
 
 For factor-mining docs in this workspace:
 
@@ -72,8 +64,7 @@ Real ML research needs something else:
 Compared with Andrej Karpathy's `autoresearch`, this project is less about a single self-improving training loop and more about a small multi-agent research team. `autoresearch` focuses on one autonomous experiment cycle, while `research_mvp` focuses on role-based collaboration, a forum-style runtime board, a separate training queue, and a longer-running baseline workflow with EDA, docs, and result tracking.
 
 ## Core Features
-- skills  for kaggle disscusion and notebook pull
-- one-task kickoff: give the team a Kaggle or ML task and let it keep iterating from there
+- continuous factor-mining kickoff: start a daemon and let it keep generating, testing, and rescuing candidates
 - `tmux`-native multi-agent runtime with fixed roles: `leader`, `researcher`, `trainer`
 - collaborative three-agent workflow instead of one general-purpose agent trying to do everything
 - local file-backed state instead of a database
@@ -84,7 +75,7 @@ Compared with Andrej Karpathy's `autoresearch`, this project is less about a sin
 - humans can inject ideas, hints, or corrections directly into the runtime board without taking over the whole workflow
 - external `train_service` for long-running training jobs
 - simple training queue board for checking submitted jobs, status, and logs
-- recipe-driven task kickoff for Kaggle-style workflows
+- recipe-driven direction kickoff for factor families and replication targets
 - explicit EDA-first research flow before baseline iteration
 - versioned baseline workflow for code, configs, outputs, and docs
 - docs-first experiment design and result summaries
@@ -282,6 +273,6 @@ If you want a local, inspectable, hackable research runtime rather than a black-
 - OpenAI's `codex` CLI for agent orchestration
 - https://github.com/HKUDS/ClawTeam
 - https://github.com/karpathy/autoresearch
-- Kaggle BirdCLEF 2026 Tom's Claude use case
+- A-share intraday factor mining and factors.directory replication workflows
 
 (This is an AI-native project. Please feel free to point out any inappropriate descriptions or information, and I would appreciate your corrections.)

@@ -1,0 +1,35 @@
+experiment_id: v1_smoke_mock
+output_root: output/baseline_v1
+data:
+  provider: mock
+  cache_root: data/tushare
+  env_file: .env
+  universe_code: '000905.SH'
+  benchmark: '000905.SH'
+  backtest_start: '2025-01-01'
+  backtest_end: '2025-04-30'
+  warmup_start: '2024-09-01'
+  seed: 0
+  explicit_universe:
+    - MOCK000.SH
+    - MOCK001.SH
+    - MOCK002.SH
+    - MOCK003.SH
+    - MOCK004.SH
+    - MOCK005.SH
+    - MOCK006.SH
+    - MOCK007.SH
+strategy:
+  name: momentum_breakout
+  params:
+    lookback: 20
+    vol_window: 20
+    vol_ratio: 1.2
+    mom_window: 30
+    top_k: 3
+    holding_period: 5
+engine:
+  initial_capital: 1000000
+  commission_rate: 0.0003
+  slippage_bps: 5
+  rebalance: W-FRI

@@ -1,6 +1,6 @@
-# 用 Codex 运行 tinyKaggleClaw
+# 用 Codex 运行 factor-miner
 
-这份文档说明如何在本机安装 Codex CLI、用 ChatGPT Plus 登录，并让 Codex 进入 `tinyKaggleClaw` 项目执行检查、启动、排错和持续迭代任务。
+这份文档说明如何在本机安装 Codex CLI、用 ChatGPT Plus 登录，并让 Codex 进入 `factor-miner` 项目执行检查、启动、排错和持续迭代任务。
 
 ## 1. 安装 Node.js
 
@@ -51,13 +51,13 @@ codex login status
 本机当前项目路径：
 
 ```bash
-cd /mnt/storage/work/hwang/tinyKaggleClaw
+cd /mnt/storage/work/hwang/factor-miner
 ```
 
 如果是在另一台机器上使用，请替换成你自己的 clone 路径：
 
 ```bash
-cd /path/to/tinyKaggleClaw
+cd /path/to/factor-miner
 ```
 
 ## 5. 启动 Codex
@@ -79,13 +79,13 @@ codex
 项目推荐入口是 `ai_start.sh`。可以直接在 Codex 里下发：
 
 ```text
-检查当前进程和项目状态，然后用 ./ai_start.sh status 查看 tinyKaggleClaw 是否已经在运行。
+检查当前进程和项目状态，然后用 ./ai_start.sh status 查看 factor-miner 是否已经在运行。
 ```
 
 如果没有运行，再让 Codex 启动：
 
 ```text
-请从项目根目录启动 tinyKaggleClaw。优先使用 ./ai_start.sh start。启动后检查状态，并告诉我 runtime board 和 training queue board 的访问地址。
+请从项目根目录启动 factor-miner。优先使用 ./ai_start.sh start。启动后检查状态，并告诉我 runtime board 和 training queue board 的访问地址。
 ```
 
 常用人工命令如下：
@@ -134,7 +134,7 @@ Training queue board: http://127.0.0.1:8100/
 检查项目：
 
 ```text
-检查 tinyKaggleClaw 当前状态：进程、端口、日志、最近 output。不要修改文件。
+检查 factor-miner 当前状态：进程、端口、日志、最近 output。不要修改文件。
 ```
 
 排查失败：

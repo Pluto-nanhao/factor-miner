@@ -1,0 +1,25 @@
+experiment_id: v1_5_lookback20_vol1.5_topk30
+output_root: output/baseline_v1
+data:
+  provider: tushare
+  cache_root: data/tushare
+  env_file: .env
+  universe_code: '000905.SH'
+  benchmark: '000905.SH'
+  backtest_start: '2025-01-01'
+  backtest_end: '2026-05-09'
+  warmup_start: '2024-07-01'
+strategy:
+  name: momentum_breakout
+  params:
+    lookback: 20
+    vol_window: 20
+    vol_ratio: 1.5
+    mom_window: 60
+    top_k: 30
+    holding_period: 5
+engine:
+  initial_capital: 1000000
+  commission_rate: 0.0003
+  slippage_bps: 5
+  rebalance: W-FRI
