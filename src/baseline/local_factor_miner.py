@@ -297,6 +297,33 @@ DIRECTION_VECTOR_AXES = [
     "persistence_decay_control",
 ]
 FORECAST_DIRECTION_AXES = {"forecast_revenue", "forecast_profitability", "forecast_revision"}
+MAX_DIRECTION_PROFILES = int(os.environ.get("FACTOR_MINER_DIRECTION_PROFILE_LIMIT", "60"))
+UNAVAILABLE_DIRECTION_TOKENS = (
+    "revenue_forecast",
+    "financial_summary_fore",
+    "income_statement_fore",
+    "balance_sheet_fore",
+    "cash_flow_statement_fore",
+    "finance_ratio_fore",
+    "ashareconsensusrollingdata",
+    "forecast/",
+    "forecast or consensus",
+    "consensus field",
+    "DmgrWbai_AIndexCSI1000Weight",
+    "DmgrWbai_AIndexCSI500Weight",
+    "Dmgr_MktRet",
+    "aindexeodprices",
+    "equ_factor_trend",
+    "equ_h2l_factor_t1",
+    "equ_h2l_factor_t2",
+    "equ_h2l_factor_t3",
+    "equ_h2l_factor_t4",
+    "hf_daily_auction_table.RET_PRED",
+    "RET_PRED_0935",
+    "hf_daily_auction_table.STAGE_TWO_LEAVE_RATIO",
+    "STAGE_TWO_LEAVE_RATIO",
+    "CmraCNE5",
+)
 
 DIRECTION_CANDIDATES = [
     {
@@ -643,6 +670,366 @@ DIRECTION_CANDIDATES = [
         "mechanism": "use forecast/consensus availability, stability, or disagreement as confidence state and compare with daily pricing",
         "avoid": "coverage mask only or multi-field confidence score",
     },
+    {
+        "title": "早盘跳空回补与成交承接簇",
+        "cluster": "opening_gap_repair_liquidity_absorption",
+        "vector": [1, 1, 1, 1, 0, 0, 0, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1],
+        "data": "daily open/close/high/low/amount + first 3-6 Interval5m open/close/amo",
+        "mechanism": "measure whether an opening gap is repaired or extended, then require amount absorption to confirm the intraday path",
+        "avoid": "overnight gap reversal alone or raw first-bar return",
+    },
+    {
+        "title": "午盘流动性枯竭后的尾盘选择簇",
+        "cluster": "midday_liquidity_drought_late_choice",
+        "vector": [0, 1, 1, 1, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+        "data": "Interval5m.close/open/amo split into morning, midday, and late-day windows",
+        "mechanism": "detect midday amount drought after an initial move and test whether late-day price chooses continuation or repair",
+        "avoid": "simple morning-minus-afternoon return spread",
+    },
+    {
+        "title": "分时量价脉冲衰减簇",
+        "cluster": "intraday_price_amount_impulse_decay",
+        "vector": [0, 1, 1, 1, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+        "data": "Interval5m return impulse + Interval5m.amo impulse against own recent baseline",
+        "mechanism": "compare the decay speed of a price impulse with the decay speed of the amount impulse after event-time peaks",
+        "avoid": "single peak return or peak amount rank",
+    },
+    {
+        "title": "日频长影线与分时承接确认簇",
+        "cluster": "daily_shadow_intraday_absorption_confirm",
+        "vector": [1, 1, 1, 1, 0, 0, 0, 1, 1, 1, 0, 0, 1, 1, 1, 1, 1, 1, 1],
+        "data": "daily high/low/open/close/amount + intraday close/open/amo near high-low zones",
+        "mechanism": "use daily upper/lower shadow as a rejection state and require intraday amount location to confirm absorption",
+        "avoid": "candlestick shadow rank without intraday location",
+    },
+    {
+        "title": "窄幅震荡后的成交方向选择簇",
+        "cluster": "range_compression_amount_direction_choice",
+        "vector": [1, 1, 1, 1, 0, 0, 0, 1, 1, 1, 1, 1, 0, 1, 1, 1, 0, 1, 1],
+        "data": "daily range compression + current-day Interval5m close/open/amo",
+        "mechanism": "find compressed daily range states and test whether intraday amount concentrates in breakout or fade bars",
+        "avoid": "plain low-volatility breakout",
+    },
+    {
+        "title": "尾部成交集中与次日反转风险簇",
+        "cluster": "tail_amount_concentration_next_reversal_risk",
+        "vector": [1, 1, 1, 1, 0, 0, 0, 0, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1],
+        "data": "Interval5m amount concentration at extreme return bars + daily OHLCV/amount",
+        "mechanism": "detect whether amount piles into intraday tail moves and use persistence controls to separate exhaustion from continuation",
+        "avoid": "full-day turnover rank or max-return-bar rank alone",
+    },
+    {
+        "title": "上涨缩量与下跌放量非对称簇",
+        "cluster": "up_down_volume_asymmetry_daily_intraday",
+        "vector": [1, 1, 1, 1, 0, 0, 0, 1, 1, 0, 1, 1, 1, 1, 1, 1, 0, 1, 1],
+        "data": "daily return/amount + signed Interval5m return and amount buckets",
+        "mechanism": "compare liquidity allocated to up bars versus down bars under the same daily return state",
+        "avoid": "OBV-like cumulative signed amount without regime conditioning",
+    },
+    {
+        "title": "市场分歧放大下的个股修复簇",
+        "cluster": "cross_sectional_dispersion_stock_repair",
+        "vector": [1, 1, 1, 0, 0, 0, 0, 1, 1, 0, 1, 0, 1, 0, 1, 1, 0, 1, 1],
+        "data": "cross-sectional daily and intraday return dispersion + stock daily OHLCV",
+        "mechanism": "condition individual stock repair on whether same-day market dispersion is unusually wide",
+        "avoid": "market return beta or pure cross-sectional z-score",
+    },
+    {
+        "title": "高波动日内收敛与成交再分配簇",
+        "cluster": "high_vol_intraday_convergence_amount_reallocation",
+        "vector": [1, 1, 1, 1, 0, 0, 0, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1],
+        "data": "daily range/abs return + intraday close/open/amo event windows",
+        "mechanism": "in high-volatility states, measure whether intraday price converges while amount migrates away from extreme bars",
+        "avoid": "realized volatility short signal",
+    },
+    {
+        "title": "开盘强弱与全天量能背离簇",
+        "cluster": "opening_strength_full_day_liquidity_divergence",
+        "vector": [1, 1, 1, 1, 0, 0, 0, 1, 1, 1, 0, 1, 1, 1, 0, 1, 1, 0, 1],
+        "data": "first-window Interval5m return/amo + full-day daily amount and close location",
+        "mechanism": "compare opening strength with whether full-day liquidity confirms or rejects the initial move",
+        "avoid": "first-window momentum alone",
+    },
+    {
+        "title": "连续小实体后的量价突破簇",
+        "cluster": "small_body_sequence_amount_breakout",
+        "vector": [1, 1, 1, 1, 0, 0, 0, 0, 1, 0, 1, 1, 1, 1, 1, 1, 0, 1, 1],
+        "data": "daily open/close/high/low/amount history + current-day Interval5m amount confirmation",
+        "mechanism": "use a sequence of small daily bodies as compression state and require intraday amount to validate breakout or failure",
+        "avoid": "rolling volatility only or daily body rank alone",
+    },
+    {
+        "title": "日内高点失败与流动性撤退簇",
+        "cluster": "intraday_high_failure_liquidity_retreat",
+        "vector": [1, 1, 1, 1, 0, 0, 0, 0, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1],
+        "data": "intraday high-time close/open path + Interval5m.amo before and after high event",
+        "mechanism": "detect failure after intraday high and measure whether liquidity retreats or remains trapped near the high",
+        "avoid": "daily close-to-high distance alone",
+    },
+    {
+        "title": "低位放量修复与趋势延续冲突簇",
+        "cluster": "low_location_volume_repair_trend_conflict",
+        "vector": [1, 1, 1, 1, 0, 0, 0, 1, 1, 1, 0, 1, 1, 1, 1, 1, 0, 1, 1],
+        "data": "daily low-location state + intraday amount near low zone + recent daily return trend",
+        "mechanism": "separate low-location liquidity absorption that repairs from low-location weakness that continues",
+        "avoid": "bottom quantile reversal without amount-location evidence",
+    },
+    {
+        "title": "跨日量能记忆与当日价格迟滞簇",
+        "cluster": "daily_amount_memory_intraday_price_lag",
+        "vector": [1, 1, 1, 1, 0, 0, 0, 1, 1, 0, 0, 1, 0, 1, 0, 1, 0, 0, 1],
+        "data": "rolling daily amount memory + current-day intraday close/open and amount-share baseline",
+        "mechanism": "use recent daily amount memory as liquidity regime and find current-day price lag or delayed confirmation",
+        "avoid": "rolling amount rank alone",
+    },
+    {
+        "title": "极端振幅后的价格成交再平衡簇",
+        "cluster": "extreme_range_price_amount_rebalance",
+        "vector": [1, 1, 1, 1, 0, 0, 0, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1],
+        "data": "daily true-range proxy + intraday return distribution and amount distribution",
+        "mechanism": "after extreme daily range, test whether price path and amount path rebalance or stay one-sided",
+        "avoid": "absolute range rank without amount distribution",
+    },
+    {
+        "title": "多窗口分时趋势一致性簇",
+        "cluster": "multi_window_intraday_trend_consistency",
+        "vector": [0, 1, 1, 1, 0, 0, 0, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 0, 1],
+        "data": "morning/midday/late Interval5m open-close path + amount allocation",
+        "mechanism": "compare trend consistency across multiple intraday windows and use amount allocation to filter weak continuation",
+        "avoid": "single fixed-window return momentum",
+    },
+    {
+        "title": "开盘放量未突破压力簇",
+        "cluster": "opening_volume_failed_breakout_pressure",
+        "vector": [1, 1, 1, 1, 0, 0, 0, 1, 1, 1, 0, 0, 1, 1, 1, 1, 1, 1, 1],
+        "data": "daily high/low/open/close/amount + first-window Interval5m close/open/amo",
+        "mechanism": "identify large opening liquidity that fails to move price through recent daily resistance and test reversal pressure",
+        "avoid": "opening amount rank without failed-breakout condition",
+    },
+    {
+        "title": "尾盘缩量拉升脆弱性簇",
+        "cluster": "late_rise_low_amount_fragility",
+        "vector": [1, 1, 1, 1, 0, 0, 0, 0, 1, 1, 0, 1, 1, 1, 0, 1, 1, 1, 1],
+        "data": "late-window Interval5m close/open/amo + daily close location and amount baseline",
+        "mechanism": "separate late price strength supported by liquidity from thin late lifts that are likely to mean-revert",
+        "avoid": "last-window return momentum alone",
+    },
+    {
+        "title": "早盘下杀后的午后资金回流簇",
+        "cluster": "morning_selloff_afternoon_flow_return",
+        "vector": [1, 1, 1, 1, 0, 0, 0, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1],
+        "data": "morning and afternoon Interval5m return/amo + daily OHLCV/amount",
+        "mechanism": "measure morning downside pressure and whether afternoon amount returns before price fully repairs",
+        "avoid": "morning return reversal without amount-return sequencing",
+    },
+    {
+        "title": "日内阶梯式上行与成交递减簇",
+        "cluster": "staircase_rise_declining_amount",
+        "vector": [0, 1, 1, 1, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+        "data": "Interval5m close/open path monotonicity + rolling Interval5m amo share",
+        "mechanism": "test whether a staircase intraday rise is supported by stable amount or becomes fragile as amount decays",
+        "avoid": "monotonic return count alone",
+    },
+    {
+        "title": "分时V形修复质量簇",
+        "cluster": "intraday_v_repair_quality",
+        "vector": [1, 1, 1, 1, 0, 0, 0, 0, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1],
+        "data": "Interval5m close/open/amo around intraday low event + daily low/close location",
+        "mechanism": "evaluate whether a V-shaped repair has amount support after the intraday low or is only price noise",
+        "avoid": "low-to-close distance alone",
+    },
+    {
+        "title": "分时倒V出货压力簇",
+        "cluster": "intraday_inverted_v_distribution_pressure",
+        "vector": [1, 1, 1, 1, 0, 0, 0, 0, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1],
+        "data": "Interval5m close/open/amo around intraday high event + daily high/close location",
+        "mechanism": "detect an intraday high followed by amount-heavy fade and separate distribution pressure from normal volatility",
+        "avoid": "high-to-close distance alone",
+    },
+    {
+        "title": "成交额分布偏度与价格漂移簇",
+        "cluster": "amount_distribution_skew_price_drift",
+        "vector": [0, 1, 1, 1, 0, 0, 0, 0, 1, 0, 1, 1, 1, 1, 1, 1, 0, 1, 1],
+        "data": "Interval5m amo distribution skew/rank + intraday close/open drift",
+        "mechanism": "compare skewed amount allocation with the direction and persistence of intraday price drift",
+        "avoid": "amount skew without signed price path",
+    },
+    {
+        "title": "价格新高无量背离簇",
+        "cluster": "new_high_without_amount_divergence",
+        "vector": [1, 1, 1, 1, 0, 0, 0, 0, 1, 1, 0, 1, 1, 1, 1, 1, 0, 1, 1],
+        "data": "daily and intraday high-location state + amount share near new-high event",
+        "mechanism": "find new price highs that are not accompanied by proportional amount and test fade risk",
+        "avoid": "new-high breakout rank alone",
+    },
+    {
+        "title": "价格新低缩量止跌簇",
+        "cluster": "new_low_low_amount_stabilization",
+        "vector": [1, 1, 1, 1, 0, 0, 0, 0, 1, 1, 0, 0, 1, 1, 1, 1, 0, 1, 1],
+        "data": "daily and intraday low-location state + amount share near new-low event",
+        "mechanism": "separate exhausted low-volume new lows from liquidity-heavy downside continuation",
+        "avoid": "new-low reversal without amount state",
+    },
+    {
+        "title": "放量长下影吸收簇",
+        "cluster": "high_amount_lower_shadow_absorption",
+        "vector": [1, 1, 1, 1, 0, 0, 0, 1, 1, 1, 0, 0, 1, 1, 1, 1, 1, 1, 1],
+        "data": "daily lower shadow + amount + intraday low-zone amo",
+        "mechanism": "treat long lower shadows as absorption only when intraday low-zone amount and close repair agree",
+        "avoid": "lower-shadow candlestick factor alone",
+    },
+    {
+        "title": "放量长上影派发簇",
+        "cluster": "high_amount_upper_shadow_distribution",
+        "vector": [1, 1, 1, 1, 0, 0, 0, 1, 1, 1, 0, 0, 1, 1, 1, 1, 1, 1, 1],
+        "data": "daily upper shadow + amount + intraday high-zone amo",
+        "mechanism": "treat long upper shadows as distribution only when high-zone amount is heavy and late repair fails",
+        "avoid": "upper-shadow candlestick factor alone",
+    },
+    {
+        "title": "连续放量后的边际量能衰减簇",
+        "cluster": "consecutive_high_amount_marginal_decay",
+        "vector": [1, 1, 0, 1, 0, 0, 0, 0, 1, 0, 1, 1, 1, 1, 1, 1, 0, 1, 1],
+        "data": "rolling daily amount and current-day Interval5m amo share + daily close location",
+        "mechanism": "after consecutive high-amount days, measure whether current marginal amount decays while price remains stretched",
+        "avoid": "turnover crowding rank alone",
+    },
+    {
+        "title": "低波动高成交异常簇",
+        "cluster": "low_vol_high_amount_anomaly",
+        "vector": [1, 1, 1, 1, 0, 0, 0, 1, 1, 0, 1, 0, 1, 1, 1, 1, 0, 1, 1],
+        "data": "daily range/abs return + daily amount + Interval5m amount distribution",
+        "mechanism": "detect unusual high liquidity under compressed price movement and test whether pressure resolves directionally",
+        "avoid": "high turnover in isolation",
+    },
+    {
+        "title": "高波动低成交真空簇",
+        "cluster": "high_vol_low_amount_vacuum",
+        "vector": [1, 1, 1, 1, 0, 0, 0, 1, 1, 0, 1, 0, 1, 1, 1, 1, 0, 1, 1],
+        "data": "daily range/abs return + daily amount + intraday return dispersion",
+        "mechanism": "identify large price movement without enough amount support and test snapback versus continuation",
+        "avoid": "range rank without liquidity condition",
+    },
+    {
+        "title": "大单资金流与日内价格背离簇",
+        "cluster": "moneyflow_intraday_price_divergence",
+        "vector": [1, 1, 1, 0, 0, 0, 0, 1, 1, 1, 0, 1, 1, 1, 0, 1, 1, 1, 1],
+        "data": "AShareMoneyFlow large-order or net-flow fields + daily OHLCV + optional intraday price path",
+        "mechanism": "compare money-flow pressure with intraday price response and capture underreaction or reversal",
+        "avoid": "net-flow rank without price-response mismatch",
+    },
+    {
+        "title": "资金流方向变化与成交额记忆簇",
+        "cluster": "moneyflow_direction_change_amount_memory",
+        "vector": [1, 1, 0, 0, 0, 0, 0, 1, 1, 0, 1, 1, 1, 1, 0, 1, 0, 1, 1],
+        "data": "AShareMoneyFlow net-flow change + rolling daily amount memory + daily OHLC",
+        "mechanism": "use change in flow direction relative to recent amount memory to separate fresh pressure from stale crowding",
+        "avoid": "one-day money-flow level",
+    },
+    {
+        "title": "OBOS状态与日内承接错配簇",
+        "cluster": "obos_intraday_absorption_mismatch",
+        "vector": [1, 1, 1, 1, 0, 0, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1],
+        "data": "equ_factor_obos + daily OHLCV/amount + Interval5m amount near extreme bars",
+        "mechanism": "condition OBOS extreme states on whether intraday liquidity absorbs or amplifies the move",
+        "avoid": "direct OBOS reversal",
+    },
+    {
+        "title": "量能因子与尾盘修复冲突簇",
+        "cluster": "volume_factor_late_repair_conflict",
+        "vector": [1, 1, 1, 1, 0, 0, 0, 1, 1, 1, 0, 1, 1, 1, 0, 1, 1, 1, 1],
+        "data": "equ_factor_volume + daily OHLCV/amount + late-window Interval5m close/open/amo",
+        "mechanism": "compare precomputed volume state with late-day repair quality to find continuation or exhaustion",
+        "avoid": "equ_factor_volume field rank alone",
+    },
+    {
+        "title": "风险收益状态与分时极端回补簇",
+        "cluster": "return_risk_state_intraday_extreme_repair",
+        "vector": [1, 0, 1, 1, 0, 0, 0, 1, 1, 1, 1, 0, 1, 0, 1, 1, 1, 1, 1],
+        "data": "available equ_factor_return risk fields excluding CmraCNE5 + intraday extreme repair path",
+        "mechanism": "use a return-risk state as context and test whether intraday extremes are repaired with persistence",
+        "avoid": "single risk factor rank or direct volatility short",
+    },
+    {
+        "title": "Fancy状态与分时量价确认簇",
+        "cluster": "fancy_state_intraday_price_amount_confirm",
+        "vector": [1, 1, 1, 1, 0, 0, 0, 1, 1, 0, 1, 1, 1, 1, 1, 1, 0, 1, 1],
+        "data": "equ_fancy_factors_table1-10 one field + daily OHLCV/amount + Interval5m close/open/amo confirmation",
+        "mechanism": "use one fancy-factor state only as context and require intraday price/amount confirmation",
+        "avoid": "stacking multiple fancy fields",
+    },
+    {
+        "title": "高频日派生波动与日内路径错配簇",
+        "cluster": "hf_daily_vol_intraday_path_mismatch",
+        "vector": [1, 1, 1, 1, 0, 0, 0, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1],
+        "data": "hf_daily_der_table_* volatility/liquidity derivative + current-day Interval5m close/open/amo",
+        "mechanism": "compare high-frequency daily derivative state with realized intraday path shape and amount placement",
+        "avoid": "raw hf_daily field rank without path mismatch",
+    },
+    {
+        "title": "竞价成交强度与全天价格确认簇",
+        "cluster": "auction_commission_strength_daily_confirm",
+        "vector": [1, 1, 0, 0, 0, 0, 0, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1],
+        "data": "hf_daily_auction_table.COMMISSION/JUMP_RET or other available auction fields + daily OHLCV/amount",
+        "mechanism": "use auction participation and jump state as opening pressure, then require full-day price confirmation or repair",
+        "avoid": "RET_PRED, RET_PRED_0935, STAGE_TWO_LEAVE_RATIO, or auction jump alone",
+    },
+    {
+        "title": "日频质量因子与资金拥挤冲突簇",
+        "cluster": "quality_factor_liquidity_crowding_conflict",
+        "vector": [1, 1, 0, 0, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1],
+        "data": "equ_factor_pq or equ_factor_derive quality field + equ_factor_volume/AShareMoneyFlow + daily OHLCV",
+        "mechanism": "find quality states contradicted by liquidity crowding and test whether price has overreacted",
+        "avoid": "pure quality rank or pure turnover rank",
+    },
+    {
+        "title": "成长质量与日频修复错配簇",
+        "cluster": "growth_quality_daily_repair_mismatch",
+        "vector": [1, 1, 0, 0, 0, 1, 0, 1, 1, 0, 1, 1, 1, 0, 0, 1, 0, 1, 1],
+        "data": "equ_factor_growth/equ_factor_pq one available field + daily OHLCV/amount",
+        "mechanism": "compare growth or quality state with daily repair behavior after recent weakness",
+        "avoid": "slow pure growth factor",
+    },
+    {
+        "title": "日内成交重心迁移速度簇",
+        "cluster": "intraday_amount_centroid_migration_speed",
+        "vector": [0, 1, 1, 1, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1],
+        "data": "Interval5m amo centroid across event-time windows + Interval5m close/open path",
+        "mechanism": "measure how fast amount centroid migrates through the day and whether price follows or lags that migration",
+        "avoid": "static amount-weighted time of day",
+    },
+    {
+        "title": "分时价格重心与成交重心背离簇",
+        "cluster": "intraday_price_centroid_amount_centroid_divergence",
+        "vector": [0, 1, 1, 1, 0, 0, 0, 0, 1, 1, 1, 0, 1, 1, 0, 1, 1, 1, 1],
+        "data": "Interval5m price-location centroid + Interval5m amount centroid",
+        "mechanism": "compare where price spends time versus where amount concentrates and test delayed correction",
+        "avoid": "VWAP distance alone",
+    },
+    {
+        "title": "大振幅后窄幅整理承接簇",
+        "cluster": "post_extreme_range_narrow_consolidation_absorption",
+        "vector": [1, 1, 1, 1, 0, 0, 0, 1, 1, 0, 1, 1, 1, 1, 1, 1, 0, 1, 1],
+        "data": "recent daily range shock + current narrow intraday range and amount allocation",
+        "mechanism": "after a large daily range shock, test whether narrow consolidation absorbs pressure or precedes continuation",
+        "avoid": "range compression without prior shock context",
+    },
+    {
+        "title": "低成交高价格效率簇",
+        "cluster": "low_amount_high_price_efficiency",
+        "vector": [1, 1, 1, 1, 0, 0, 0, 1, 1, 0, 1, 1, 0, 1, 0, 1, 0, 1, 1],
+        "data": "daily amount baseline + Interval5m close/open efficiency and amount share",
+        "mechanism": "find days where price moves efficiently with little amount and test whether the move is informed or fragile",
+        "avoid": "low amount rank or price efficiency rank alone",
+    },
+    {
+        "title": "连续尾盘成交后置簇",
+        "cluster": "persistent_late_day_amount_backload",
+        "vector": [1, 1, 1, 1, 0, 0, 0, 0, 1, 1, 0, 1, 1, 1, 0, 1, 1, 0, 1],
+        "data": "multi-day late-window Interval5m amo share + daily close location",
+        "mechanism": "measure whether late-day amount backloading persists across days and whether price confirms or fades",
+        "avoid": "single-day late amount share",
+    },
 ]
 
 
@@ -657,6 +1044,14 @@ def _profile_uses_forecast(profile: dict) -> bool:
         and int(vector[DIRECTION_VECTOR_AXES.index(axis)]) != 0
         for axis in FORECAST_DIRECTION_AXES
     )
+
+
+def _profile_uses_unavailable_data(profile: dict) -> bool:
+    text = " ".join(
+        str(profile.get(key, ""))
+        for key in ("title", "cluster", "data", "mechanism", "avoid")
+    )
+    return any(token in text for token in UNAVAILABLE_DIRECTION_TOKENS)
 
 
 def _validate_direction_vectors() -> None:
@@ -692,6 +1087,7 @@ DIRECTION_PROFILES = [
     profile
     for profile in _diversified_direction_profiles()
     if FORECAST_DATA_ENABLED or not _profile_uses_forecast(profile)
+    if not _profile_uses_unavailable_data(profile)
 ]
 NEXT_DIRECTION_JSON = Path(
     os.environ.get("FACTOR_MINER_NEXT_DIRECTION_JSON", str(REPO_ROOT / "output" / "next_factor_direction.json"))
@@ -739,6 +1135,8 @@ if DYNAMIC_DIRECTION_PROFILES:
         profile for profile in DIRECTION_PROFILES
         if tuple(profile.get("vector", [])) not in seen_direction_keys
     ]
+if MAX_DIRECTION_PROFILES > 0:
+    DIRECTION_PROFILES = DIRECTION_PROFILES[:MAX_DIRECTION_PROFILES]
 DIRECTIONS = [profile["title"] for profile in DIRECTION_PROFILES]
 
 RESEARCH_REPORT_GUIDANCE = """\
